@@ -29,3 +29,9 @@ export async function submitBidAction(postId: any, bidderName: any, unitPrice: a
 export async function selectWinningBid(formData: FormData) {
   return { success: true };
 }
+
+export async function awardAndContractAction(postId: any, bidId: any, password: any) {
+  // 낙찰 및 계약 처리 로직
+  console.log('Award and contract:', { postId, bidId, password });
+  return { success: true, message: '' };
+}

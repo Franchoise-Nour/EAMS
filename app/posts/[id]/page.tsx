@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { submitBidAction, selectWinningBid } from '../../actions';
+import { submitBidAction, awardAndContractAction } from '../../actions';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
