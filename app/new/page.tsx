@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createAuctionAction } from '@/actions';
+import { createAuctionAction } from '../actions';
 
 export default function NewAuctionPage() {
   const router = useRouter();
