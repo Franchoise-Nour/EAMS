@@ -34,7 +34,7 @@ export default function PostListPage() {
     <div style={{ fontFamily: 'Malgun Gothic, sans-serif', fontSize: '12px', backgroundColor: '#f4f6f9', minHeight: '100vh', paddingBottom: '40px' }}>
       {/* 헤더 */}
       <header style={{ backgroundColor: '#1a3863', color: '#fff', padding: '12px 20px', borderBottom: '3px solid #0b2242', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>대한민국 법원 전자소송 연계 - 전자입찰 및 계약관리시스템</h1>
+        <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>전자입찰 및 계약관리시스템</h1>
         <span style={{ fontSize: '11px', color: '#b0c4de' }}>보안등급: HIGH-TRUST-SSL</span>
       </header>
 
