@@ -64,21 +64,9 @@ export async function submitBidAction(postId: any, bidderName: any, unitPrice: a
   }
 }
 
-// 3. 낙찰 처리 Action
+// 3. 낙찰 처리 Action (비밀번호 검증 제외)
 export async function awardAndContractAction(postId: any, bidId: any, password: any) {
   try {
-    // 공고 조회 및 비밀번호 검증
-    const { data: post, error: postErr } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('id', postId)
-      .single();
-
-    if (postErr || !post) return { success: false, message: '공고를 찾증할 수 없습니다.' };
-
-    const isMatch = await bcrypt.compare(password, post.password_hash);
-    if (!isMatch) return { success: false, message: '비밀번호가 일치하지 않습니다.' };
-
     // 입찰 내역 조회
     const { data: bid, error: bidErr } = await supabase
       .from('bids')
@@ -88,10 +76,10 @@ export async function awardAndContractAction(postId: any, bidId: any, password: 
 
     if (bidErr || !bid) return { success: false, message: '선택한 응찰 내역을 찾을 수 없습니다.' };
 
-    // 계약서 생성을 위해 posts 상태 변경 (closed)
+    // posts 상태를 closed(낙찰 완료)로 변경
     await supabase.from('posts').update({ status: 'closed' }).eq('id', postId);
 
-    // 계약서 DB 저장
+    // 계약서 생성
     const { data: contract, error: contractErr } = await supabase
       .from('contracts')
       .insert([

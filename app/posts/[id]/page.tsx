@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import { submitBidAction, awardAndContractAction } from '../../actions';
 
@@ -11,19 +12,18 @@ const supabase = createClient(
 
 export default function PostDetailPage({ params }: { params: { id: string } }) {
   const [post, setPost] = useState<any>(null);
+  const [allPosts, setAllPosts] = useState<any[]>([]); // 사이드바용 공개 입찰 공고 목록
   const [bids, setBids] = useState<any[]>([]);
   const [lowestPrice, setLowestPrice] = useState<number | null>(null);
   const [contract, setContract] = useState<any>(null);
 
   const [bidderName, setBidderName] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedBid, setSelectedBid] = useState<any>(null);
-  const [inputPassword, setInputPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     loadInitialData();
+    fetchAllPosts();
 
     const channel = supabase
       .channel(`realtime-bids-${params.id}`)
@@ -58,6 +58,12 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     }
   }
 
+  // 사이드바용 전체 공개 입찰 공고 가져오기
+  async function fetchAllPosts() {
+    const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+    if (data) setAllPosts(data);
+  }
+
   const handleBidSubmit = async () => {
     if (!bidderName || !unitPrice) return alert('성명과 단가를 입력하세요.');
     setIsSubmitting(true);
@@ -74,25 +80,22 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     }
   };
 
-  const handleAward = async () => {
-    if (!bids || bids.length === 0) {
-      return alert('현재 등록된 응찰 내역이 없습니다.');
+  // 비밀번호 없이 즉시 낙찰 처리
+  const handleAwardDirect = async (bid: any) => {
+    if (!confirm(`'${bid.bidder_name}'님 (${Number(bid.unit_price).toLocaleString()}원) 입찰건으로 즉시 낙찰 결정하시겠습니까?`)) {
+      return;
     }
-    if (!selectedBid) {
-      return alert('낙찰시킬 응찰 항목을 선택해주세요.');
-    }
-    if (!inputPassword) return alert('게시자 비밀번호를 입력하세요.');
 
     setIsSubmitting(true);
-    const res = await awardAndContractAction(params.id, selectedBid.id, inputPassword);
+    // 패스워드 인자 자리에 빈 값을 넘깁니다.
+    const res = await awardAndContractAction(params.id, bid.id, '');
     setIsSubmitting(false);
 
     if (res.success) {
-      alert('낙찰 처리 및 전자계약서가 정상적으로 발급되었습니다.');
-      setIsModalOpen(false);
-      setInputPassword('');
+      alert('낙찰 결정 및 전자계약서가 즉시 발급되었습니다.');
       setContract(res.contract);
       setPost((prev: any) => ({ ...prev, status: 'closed' }));
+      fetchAllPosts();
     } else {
       alert('낙찰 실패: ' + res.message);
     }
@@ -104,26 +107,26 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <div style={{ fontFamily: 'Malgun Gothic, sans-serif', fontSize: '12px', backgroundColor: '#f4f6f9', minHeight: '100vh', paddingBottom: '40px' }}>
-      {/* 상단 헤더 */}
+      {/* 헤더 */}
       <header style={{ backgroundColor: '#1a3863', color: '#fff', padding: '12px 20px', borderBottom: '3px solid #0b2242', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>전자입찰 및 계약관리시스템</h1>
         <span style={{ fontSize: '11px', color: '#b0c4de' }}>보안등급: HIGH-TRUST-SSL</span>
       </header>
 
-      {/* 메인 콘텐트 (2단 분할 레이아웃) */}
-      <div style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 15px', display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px' }}>
+      {/* 2단 메인 레이아웃 */}
+      <div style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 15px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px' }}>
         
-        {/* [좌측 본문] 공고 내용, 응찰서 제출, 계약서 */}
+        {/* [좌측 본문] 공고 상세 내용 & 응찰 현황 & 계약서 */}
         <div>
-          {/* 공고 제목 및 상태 */}
+          {/* 공고 제목 */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>[입찰 공고] {post.title}</span>
-            <span style={{ backgroundColor: isActive ? '#28a745' : '#6c757d', color: '#fff', padding: '3px 8px', fontSize: '11px', borderRadius: '2px' }}>
-              {isActive ? '입찰 진행 중' : '낙찰 및 계약 완료'}
+            <span style={{ backgroundColor: isActive ? '#28a745' : '#6c757d', color: '#fff', padding: '3px 8px', fontSize: '11px' }}>
+              {isActive ? '입찰 진행 중' : '낙찰 완료'}
             </span>
           </div>
 
-          {/* 공고 물품 세부 정보 */}
+          {/* 공고 물품 상세 */}
           <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '2px solid #1a3863', backgroundColor: '#fff', marginBottom: '20px' }}>
             <tbody>
               <tr>
@@ -145,7 +148,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </tbody>
           </table>
 
-          {/* 전자 응찰서 제출 폼 (입찰 진행 중일 때만 노출) */}
+          {/* 전자 응찰서 제출 */}
           {isActive && (
             <>
               <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px' }}>전자 응찰서 제출</div>
@@ -169,7 +172,44 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </>
           )}
 
-          {/* 발급된 전자 계약서 (낙찰 완료 시 노출) */}
+          {/* 본문 응찰 내역 표 (바로 낙찰 결정) */}
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px' }}>현재 공고 응찰 현황</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '2px solid #555', backgroundColor: '#fff', marginBottom: '30px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#e9ecef' }}>
+                <th style={gridThStyle}>공급 신청자</th>
+                <th style={gridThStyle}>제시 공급 단가</th>
+                <th style={gridThStyle}>접수 일시</th>
+                <th style={gridThStyle}>낙찰 실행</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bids.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ ...tdStyle, textAlign: 'center', padding: '15px', color: '#777' }}>등록된 응찰 내역이 없습니다.</td>
+                </tr>
+              ) : (
+                bids.map((b) => (
+                  <tr key={b.id} style={{ textAlign: 'center' }}>
+                    <td style={tdStyle}>{b.bidder_name}</td>
+                    <td style={{ ...tdStyle, fontWeight: 'bold', color: '#d9534f' }}>{Number(b.unit_price).toLocaleString()} 원</td>
+                    <td style={tdStyle}>{new Date(b.created_at).toLocaleString('ko-KR')}</td>
+                    <td style={tdStyle}>
+                      {isActive ? (
+                        <button onClick={() => handleAwardDirect(b)} disabled={isSubmitting} style={btnActionStyle}>
+                          바로 낙찰
+                        </button>
+                      ) : (
+                        <span style={{ color: '#888' }}>마감됨</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {/* 전자 계약서 */}
           {contract && (
             <div style={{ backgroundColor: '#fff', border: '2px solid #1a3863', padding: '25px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
               <h2 style={{ textAlign: 'center', fontSize: '18px', color: '#1a3863', textDecoration: 'underline', marginBottom: '20px' }}>
@@ -178,21 +218,20 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
               <p style={{ lineHeight: '1.6', marginBottom: '12px' }}>
                 수요자(이하 "발주자")와 공급자 <strong>{contract.supplier_name}</strong>(이하 "공급자")는 다음과 같이 물품 공급 계약을 체결한다.
               </p>
-              <div style={{ marginBottom: '12px', lineHeight: '1.5' }}>
+              <div style={{ marginBottom: '12px' }}>
                 <strong>제1조 (공급 물품 및 단가)</strong><br />
                 1. 물품명: {post.item_name} ({post.spec})<br />
                 2. 확정 공급 단가: <strong>개당 {Number(contract.unit_price).toLocaleString()}원 (VAT 포함)</strong>
               </div>
-              <div style={{ marginBottom: '12px', lineHeight: '1.5' }}>
+              <div style={{ marginBottom: '12px' }}>
                 <strong>제2조 (계약 기간)</strong><br />
                 본 계약의 기간은 <strong>{contract.start_date} ~ {contract.end_date}</strong> 까지로 한다.
               </div>
-              <div style={{ marginBottom: '20px', lineHeight: '1.5' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <strong>제3조 (위약금 조항)</strong><br />
                 귀책사유로 계약 해지 시, 귀책 당사자는 상대방에게 <strong>위약금 {Number(contract.penalty_amount).toLocaleString()}원</strong>을 지급한다.
               </div>
-
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
                   <tr>
                     <td style={{ border: '1px solid #aaa', padding: '10px', width: '50%', backgroundColor: '#fdfdfd' }}>
@@ -211,83 +250,45 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
-        {/* [우측 사이드바] 실시간 응찰 목록 및 낙찰 결정 */}
+        {/* [우측 사이드바] 공개 입찰 공고 목록 */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', height: 'fit-content', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <div style={{ backgroundColor: '#1a3863', color: '#fff', padding: '10px 12px', fontWeight: 'bold', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>실시간 응찰 현황</span>
-            <span style={{ fontSize: '11px', backgroundColor: '#0b2242', padding: '2px 6px', borderRadius: '10px' }}>총 {bids.length}건</span>
+            <span>공개 입찰 공고 목록</span>
+            <Link href="/new" style={{ color: '#fff', fontSize: '11px', textDecoration: 'none', backgroundColor: '#28a745', padding: '2px 6px', borderRadius: '2px' }}>+ 등록</Link>
           </div>
 
-          <div style={{ padding: '10px', maxHeight: '550px', overflowY: 'auto' }}>
-            {bids.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#777' }}>등록된 응찰 내역이 없습니다.</div>
+          <div style={{ padding: '10px', maxHeight: '600px', overflowY: 'auto' }}>
+            {allPosts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#777' }}>등록된 공고가 없습니다.</div>
             ) : (
-              bids.map((b, index) => (
-                <div key={b.id} style={{ borderBottom: '1px solid #eee', padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-                      {index === 0 && <span style={{ color: '#d9534f', marginRight: '4px' }}>[최저가]</span>}
-                      {b.bidder_name}
-                    </span>
-                    <span style={{ fontWeight: 'bold', color: '#d9534f', fontSize: '13px', fontFamily: 'monospace' }}>
-                      {Number(b.unit_price).toLocaleString()}원
-                    </span>
+              allPosts.map((p) => {
+                const isCurrent = p.id === params.id;
+                return (
+                  <div key={p.id} style={{ borderBottom: '1px solid #eee', padding: '8px 0', backgroundColor: isCurrent ? '#f0f4f8' : 'transparent', paddingLeft: isCurrent ? '5px' : '0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '10px', backgroundColor: p.status === 'active' ? '#28a745' : '#6c757d', color: '#fff', padding: '1px 4px', borderRadius: '2px' }}>
+                        {p.status === 'active' ? '진행중' : '완료'}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#888' }}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</span>
+                    </div>
+                    <Link href={`/posts/${p.id}`} style={{ fontWeight: isCurrent ? 'bold' : 'normal', color: '#1a3863', textDecoration: 'none', fontSize: '12px' }}>
+                      {p.title}
+                    </Link>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#888' }}>
-                    <span>{new Date(b.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
-                    {isActive && (
-                      <button 
-                        onClick={() => { setSelectedBid(b); setIsModalOpen(true); }} 
-                        style={btnActionStyle}
-                      >
-                        낙찰 선택
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
       </div>
-
-      {/* 비밀번호 검증 모달 */}
-      {isModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', border: '2px solid #1a3863', width: '360px', padding: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ background: '#1a3863', color: '#fff', padding: '8px 10px', margin: '-15px -15px 15px -15px', fontSize: '13px' }}>
-              게시자 비밀번호 검증
-            </h3>
-            <p style={{ marginBottom: '12px', lineHeight: '1.4' }}>
-              <strong>{selectedBid?.bidder_name}</strong>님의 <strong>{Number(selectedBid?.unit_price).toLocaleString()}원</strong> 응찰건을 낙찰 처리하시겠습니까?
-            </p>
-            <input 
-              type="password" 
-              placeholder="글 관리 비밀번호 입력" 
-              value={inputPassword} 
-              onChange={(e) => setInputPassword(e.target.value)} 
-              onKeyDown={(e) => e.key === 'Enter' && handleAward()}
-              style={{ ...inputStyle, width: '100%', marginBottom: '15px', padding: '8px' }} 
-              autoFocus
-            />
-            <div style={{ textAlign: 'right' }}>
-              <button onClick={handleAward} disabled={isSubmitting} style={btnCourtStyle}>
-                {isSubmitting ? '처리 중...' : '확인 및 낙찰 체결'}
-              </button>
-              <button onClick={() => { setIsModalOpen(false); setInputPassword(''); }} style={{ ...btnCourtStyle, backgroundColor: '#7f8c8d', marginLeft: '5px' }}>
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 const thStyle = { backgroundColor: '#f0f4f8', border: '1px solid #d0d7de', padding: '8px', textAlign: 'left' as const, width: '22%' };
 const tdStyle = { border: '1px solid #d0d7de', padding: '8px', backgroundColor: '#fff' };
-const inputStyle = { border: '1px solid #abb8c3', padding: '6px', fontSize: '12px', width: '200px' };
+const gridThStyle = { border: '1px solid #ccc', padding: '8px', textAlign: 'center' as const };
+const inputStyle = { border: '1px solid #abb8c3', padding: '6px', fontSize: '12px', width: '180px' };
 const btnCourtStyle = { backgroundColor: '#1a3863', color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' as const };
-const btnActionStyle = { backgroundColor: '#28a745', color: '#fff', border: 'none', padding: '3px 8px', fontSize: '11px', cursor: 'pointer', borderRadius: '2px', fontWeight: 'bold' as const };
+const btnActionStyle = { backgroundColor: '#d9534f', color: '#fff', border: 'none', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' as const };
