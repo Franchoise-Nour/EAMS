@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import { submitBidAction, awardAndContractAction } from '../../actions';
@@ -11,27 +12,29 @@ const supabase = createClient(
 );
 
 export default function PostDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
   const [post, setPost] = useState<any>(null);
   const [allPosts, setAllPosts] = useState<any[]>([]);
   const [bids, setBids] = useState<any[]>([]);
   const [lowestPrice, setLowestPrice] = useState<number | null>(null);
   const [contract, setContract] = useState<any>(null);
 
-  // 응찰 입력 폼
+  // 응찰 입력 State
   const [bidderName, setBidderName] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 낙찰 및 특약 모달 상태
+  // 낙찰 및 계약 편집 모달 State
   const [selectedBid, setSelectedBid] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
+  const [password, setPassword] = useState('');
 
-  // 전자 계약서 설정 양식 State
+  // 계약서 편집 항목 State
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState('2026-12-31');
   const [penaltyAmount, setPenaltyAmount] = useState('10000000');
   const [delayPenaltyRate, setDelayPenaltyRate] = useState('일 0.1%');
-  const [warrantyPeriod] = useState('검수 완료일로부터 1년');
+  const [warrantyPeriod, setWarrantyPeriod] = useState('검수 완료일로부터 1년');
   const [specialTerms, setSpecialTerms] = useState(
     '1. 모든 납품 물품은 발주자의 품질 검수 기준을 충족해야 한다.\n2. 분쟁 발생 시 발주자 관할 법원을 합의 관할로 한다.'
   );
@@ -94,18 +97,18 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     }
   };
 
-  // 낙찰 버튼 클릭 시 모달 오픈
   const openAwardModal = (bid: any) => {
     setSelectedBid(bid);
+    setPassword('');
     setShowModal(true);
   };
 
-  // 전자 계약서 작성 및 낙찰 실행
   const handleAwardAndContract = async () => {
-    if (!startDate || !endDate) return alert('계약 기간을 설정해 주세요.');
+    if (!password) return alert('계약 승인을 위한 비밀번호를 입력하세요.');
+    if (!startDate || !endDate) return alert('계약 기간을 입력하세요.');
 
     setIsSubmitting(true);
-    const res = await awardAndContractAction(params.id, selectedBid.id, {
+    const res = await awardAndContractAction(params.id, selectedBid.id, password, {
       startDate,
       endDate,
       penaltyAmount: Number(penaltyAmount),
@@ -116,13 +119,13 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     setIsSubmitting(false);
 
     if (res.success) {
-      alert('낙찰 결정 및 전자계약서가 발급되었습니다.');
+      alert('계약 조건 변경 및 낙찰 처리가 정상 완료되었습니다.');
       setShowModal(false);
       setContract(res.contract);
       setPost((prev: any) => ({ ...prev, status: 'closed' }));
       fetchAllPosts();
     } else {
-      alert('낙찰 실패: ' + res.message);
+      alert('처리 실패: ' + res.message);
     }
   };
 
@@ -134,24 +137,36 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     <div style={{ fontFamily: 'Malgun Gothic, sans-serif', fontSize: '12px', backgroundColor: '#f4f6f9', minHeight: '100vh', paddingBottom: '40px' }}>
       {/* 헤더 */}
       <header style={{ backgroundColor: '#1a3863', color: '#fff', padding: '12px 20px', borderBottom: '3px solid #0b2242', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>전자입찰 및 계약관리시스템</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <button 
+            onClick={() => router.back()} 
+            style={{ backgroundColor: 'transparent', color: '#fff', border: '1px solid #b0c4de', padding: '3px 8px', fontSize: '11px', cursor: 'pointer', borderRadius: '3px' }}
+          >
+            ← 뒤로가기
+          </button>
+          <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>전자입찰 및 계약관리시스템</h1>
+        </div>
         <span style={{ fontSize: '11px', color: '#b0c4de' }}>보안등급: HIGH-TRUST-SSL</span>
       </header>
 
-      {/* 2단 메인 레이아웃 */}
+      {/* 메인 2단 레이아웃 */}
       <div style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 15px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px' }}>
         
-        {/* [좌측 본문] */}
+        {/* [좌측 메인] */}
         <div>
-          {/* 공고 제목 */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>[입찰 공고] {post.title}</span>
-            <span style={{ backgroundColor: isActive ? '#28a745' : '#6c757d', color: '#fff', padding: '3px 8px', fontSize: '11px' }}>
-              {isActive ? '입찰 진행 중' : '낙찰 완료'}
-            </span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <span style={{ backgroundColor: isActive ? '#28a745' : '#6c757d', color: '#fff', padding: '3px 8px', fontSize: '11px' }}>
+                {isActive ? '입찰 진행 중' : '낙찰 완료'}
+              </span>
+              <button onClick={() => router.back()} style={{ backgroundColor: '#6c757d', color: '#fff', border: 'none', padding: '3px 8px', fontSize: '11px', cursor: 'pointer' }}>
+                이전으로
+              </button>
+            </div>
           </div>
 
-          {/* 공고 물품 상세 */}
+          {/* 공고 정보 */}
           <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '2px solid #1a3863', backgroundColor: '#fff', marginBottom: '20px' }}>
             <tbody>
               <tr>
@@ -173,7 +188,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </tbody>
           </table>
 
-          {/* 전자 응찰서 제출 */}
+          {/* 응찰 양식 */}
           {isActive && (
             <>
               <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px' }}>전자 응찰서 제출</div>
@@ -197,7 +212,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </>
           )}
 
-          {/* 현재 공고 응찰 현황 */}
+          {/* 응찰 내역 표 */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px' }}>현재 공고 응찰 현황</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '2px solid #555', backgroundColor: '#fff', marginBottom: '30px' }}>
             <thead>
@@ -205,7 +220,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                 <th style={gridThStyle}>공급 신청자</th>
                 <th style={gridThStyle}>제시 공급 단가</th>
                 <th style={gridThStyle}>접수 일시</th>
-                <th style={gridThStyle}>계약 및 낙찰</th>
+                <th style={gridThStyle}>낙찰 및 계약 편집</th>
               </tr>
             </thead>
             <tbody>
@@ -222,7 +237,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                     <td style={tdStyle}>
                       {isActive ? (
                         <button onClick={() => openAwardModal(b)} disabled={isSubmitting} style={btnActionStyle}>
-                          낙찰 및 계약 설정
+                          낙찰 & 계약 편집
                         </button>
                       ) : (
                         <span style={{ color: '#888' }}>마감됨</span>
@@ -234,7 +249,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </tbody>
           </table>
 
-          {/* 전자 계약서 출력 화면 */}
+          {/* 완료된 전자 계약서 */}
           {contract && (
             <div style={{ backgroundColor: '#fff', border: '2px solid #1a3863', padding: '25px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
               <h2 style={{ textAlign: 'center', fontSize: '18px', color: '#1a3863', textDecoration: 'underline', marginBottom: '20px' }}>
@@ -290,7 +305,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
-        {/* [우측 사이드바] 공개 입찰 공고 목록 */}
+        {/* [우측 사이드바] 공개 공고 리스트 */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', height: 'fit-content', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <div style={{ backgroundColor: '#1a3863', color: '#fff', padding: '10px 12px', fontWeight: 'bold', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>공개 입찰 공고 목록</span>
@@ -323,18 +338,33 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
 
       </div>
 
-      {/* [계약 조건 및 특약 설정 모달 팝업] */}
+      {/* [비밀번호 입력 + 계약 조건 & 특약 편집 통합 모달 팝업] */}
       {showModal && selectedBid && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#fff', width: '500px', padding: '20px', borderRadius: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <div style={{ backgroundColor: '#fff', width: '520px', padding: '20px', borderRadius: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1a3863', borderBottom: '2px solid #1a3863', paddingBottom: '8px' }}>
-              전자 계약 조건 및 특약 설정
+              낙찰 승인 및 계약 조건 편집
             </h3>
             
+            {/* 비밀번호 입력란 (상단 배치) */}
+            <div style={{ backgroundColor: '#f8f9fa', padding: '10px', border: '1px solid #dee2e6', marginBottom: '15px', borderRadius: '3px' }}>
+              <label style={{ fontWeight: 'bold', color: '#d9534f', display: 'block', marginBottom: '5px' }}>
+                * 게시자/관리자 비밀번호 확인
+              </label>
+              <input 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="비밀번호 입력"
+                style={{ ...inputStyle, width: '100%', border: '1px solid #d9534f' }}
+              />
+            </div>
+
             <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#333' }}>
-              낙찰 대상자: <strong>{selectedBid.bidder_name}</strong> (단가: {Number(selectedBid.unit_price).toLocaleString()}원)
+              낙찰 선정 대상: <strong>{selectedBid.bidder_name}</strong> (제시 단가: {Number(selectedBid.unit_price).toLocaleString()}원)
             </p>
 
+            {/* 계약 내용 편집 테이블 */}
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '15px' }}>
               <tbody>
                 <tr>
@@ -362,14 +392,20 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                   </td>
                 </tr>
                 <tr>
+                  <th style={thStyle}>하자보수보증</th>
+                  <td style={tdStyle}>
+                    <input type="text" value={warrantyPeriod} onChange={(e) => setWarrantyPeriod(e.target.value)} style={inputStyle} />
+                  </td>
+                </tr>
+                <tr>
                   <th style={thStyle}>특약 사항</th>
                   <td style={tdStyle}>
                     <textarea 
                       rows={4} 
                       value={specialTerms} 
                       onChange={(e) => setSpecialTerms(e.target.value)} 
-                      style={{ ...inputStyle, width: '100%', height: '80px', resize: 'vertical' }}
-                      placeholder="특약 내용을 입력하세요."
+                      style={{ ...inputStyle, width: '100%', height: '70px', resize: 'vertical' }}
+                      placeholder="특약 항목 직접 작성"
                     />
                   </td>
                 </tr>
@@ -381,7 +417,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                 취소
               </button>
               <button onClick={handleAwardAndContract} disabled={isSubmitting} style={btnCourtStyle}>
-                {isSubmitting ? '발급 중...' : '확정 및 계약서 발급'}
+                {isSubmitting ? '승인 중...' : '비밀번호 확인 및 계약서 발급'}
               </button>
             </div>
           </div>
@@ -395,6 +431,6 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
 const thStyle = { backgroundColor: '#f0f4f8', border: '1px solid #d0d7de', padding: '8px', textAlign: 'left' as const, width: '28%' };
 const tdStyle = { border: '1px solid #d0d7de', padding: '8px', backgroundColor: '#fff' };
 const gridThStyle = { border: '1px solid #ccc', padding: '8px', textAlign: 'center' as const };
-const inputStyle = { border: '1px solid #abb8c3', padding: '5px', fontSize: '12px', width: '200px' };
+const inputStyle = { border: '1px solid #abb8c3', padding: '5px', fontSize: '12px', width: '200px', boxSizing: 'border-box' as const };
 const btnCourtStyle = { backgroundColor: '#1a3863', color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' as const };
 const btnActionStyle = { backgroundColor: '#d9534f', color: '#fff', border: 'none', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' as const };

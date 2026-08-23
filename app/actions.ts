@@ -64,10 +64,11 @@ export async function submitBidAction(postId: any, bidderName: any, unitPrice: a
   }
 }
 
-// 낙찰 처리 및 전자계약서 작성 (계약기간 및 특약 설정 포함)
+// 비밀번호 확인 및 계약 조건/특약 편집 후 낙찰 실행
 export async function awardAndContractAction(
   postId: string,
   bidId: string,
+  passwordInput: string,
   contractDetails: {
     startDate: string;
     endDate: string;
@@ -78,7 +79,21 @@ export async function awardAndContractAction(
   }
 ) {
   try {
-    // 입찰 내역 조회
+    // 1. 공고 조회 (비밀번호 검증용)
+    const { data: post, error: postErr } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single();
+
+    if (postErr || !post) return { success: false, message: '공고 정보를 찾을 수 없습니다.' };
+
+    // 공고 작성 시 설정된 비밀번호 검증 (post.password 컬럼이 있는 경우 검사, 없으면 패스)
+    if (post.password && post.password !== passwordInput) {
+      return { success: false, message: '비밀번호가 일치하지 않습니다.' };
+    }
+
+    // 2. 입찰 내역 조회
     const { data: bid, error: bidErr } = await supabase
       .from('bids')
       .select('*')
@@ -87,10 +102,10 @@ export async function awardAndContractAction(
 
     if (bidErr || !bid) return { success: false, message: '선택한 응찰 내역을 찾을 수 없습니다.' };
 
-    // posts 상태를 closed(낙찰 완료)로 변경
+    // 3. 공고 상태 '낙찰 완료'로 변경
     await supabase.from('posts').update({ status: 'closed' }).eq('id', postId);
 
-    // 계약서 생성
+    // 4. 입력된 특약/계약 조건 반영하여 계약서 등록
     const { data: contract, error: contractErr } = await supabase
       .from('contracts')
       .insert([
