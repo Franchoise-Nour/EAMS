@@ -19,9 +19,10 @@ export async function createAuctionAction(form: any) {
   };
 }
 
-// 2. 입찰 Action
-export async function submitBid(formData: FormData) {
-  return { success: true };
+export async function submitBidAction(postId: any, bidderName: any, unitPrice: any) {
+  // 입찰 저장 로직
+  console.log('Bid submitted:', { postId, bidderName, unitPrice });
+  return { success: true, message: '' };
 }
 
 // 3. 낙찰 Action
