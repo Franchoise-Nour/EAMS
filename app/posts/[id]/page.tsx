@@ -70,22 +70,24 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
   };
 
 const handleAward = async () => {
-  // 1. 응찰 내역(입찰)이 있는지 먼저 검사
-  if (!bids || bids.length === 0) {
-    return alert('현재 등록된 응찰 내역이 없습니다.');
-  }
+    if (!bids || bids.length === 0) {
+      return alert('현재 등록된 응찰 내역이 없습니다.');
+    }
+    if (!selectedBid) {
+      return alert('낙찰시킬 응찰 항목을 선택해주세요.');
+    }
+    if (!inputPassword) return alert('비밀번호를 입력하세요.');
 
-  // 2. 입찰이 선택되었는지 검사
-  if (!selectedBid) {
-    return alert('낙찰시킬 응찰 항목을 선택해주세요.');
-  }
-
-  if (!inputPassword) return alert('비밀번호를 입력하세요.');
-
-  // 3. 서버 액션 실행
-  const res = await awardAndContractAction(params.id, selectedBid.id, inputPassword);
-  // ... 이하 동일
-};
+    const res = await awardAndContractAction(params.id, selectedBid.id, inputPassword);
+    if (res.success) {
+      alert('낙찰 처리 및 전자계약서가 발급되었습니다.');
+      setIsModalOpen(false);
+      setContract(res.contract);
+      setPost((prev: any) => ({ ...prev, status: 'closed' }));
+    } else {
+      alert('낙찰 실패: ' + res.message);
+    }
+  };
   
   if (!post) return <div style={{ padding: '20px', fontFamily: 'Malgun Gothic' }}>데이터를 불러오는 중입니다...</div>;
 

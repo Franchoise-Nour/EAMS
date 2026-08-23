@@ -21,10 +21,10 @@ export async function createAuctionAction(form: any) {
           manufacturer: form.manufacturer,
           spec: form.spec,
           monthly_volume: form.monthlyVolume,
-          delivery_place: form.deliveryPlace,
-          end_date: form.endDate,
+          delivery_place: form.deliveryPlace || '',
+          end_date: form.endDate || '',
           password_hash: hashedPassword,
-          status: 'open'
+          status: 'active' // 👈 'open' 대신 'active'로 통일
         }
       ])
       .select()
@@ -35,11 +35,7 @@ export async function createAuctionAction(form: any) {
       return { success: false, message: error.message };
     }
 
-    return { 
-      success: true, 
-      postId: data.id, 
-      message: '등록 성공' 
-    };
+    return { success: true, postId: data.id, message: '등록 성공' };
   } catch (err: any) {
     console.error('Action Error:', err);
     return { success: false, message: err.message || '서버 오류 발생' };
@@ -48,14 +44,73 @@ export async function createAuctionAction(form: any) {
 
 // 2. 입찰 제출 Action
 export async function submitBidAction(postId: any, bidderName: any, unitPrice: any) {
-  return { success: true, message: '' };
+  try {
+    const { data, error } = await supabase
+      .from('bids')
+      .insert([
+        {
+          post_id: postId,
+          bidder_name: bidderName,
+          unit_price: unitPrice
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) return { success: false, message: error.message };
+    return { success: true, message: '응찰 성공', bid: data };
+  } catch (err: any) {
+    return { success: false, message: err.message || '서버 오류 발생' };
+  }
 }
 
 // 3. 낙찰 처리 Action
 export async function awardAndContractAction(postId: any, bidId: any, password: any) {
-  return { 
-    success: true, 
-    message: '',
-    contract: {} 
-  };
+  try {
+    // 공고 조회 및 비밀번호 검증
+    const { data: post, error: postErr } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single();
+
+    if (postErr || !post) return { success: false, message: '공고를 찾증할 수 없습니다.' };
+
+    const isMatch = await bcrypt.compare(password, post.password_hash);
+    if (!isMatch) return { success: false, message: '비밀번호가 일치하지 않습니다.' };
+
+    // 입찰 내역 조회
+    const { data: bid, error: bidErr } = await supabase
+      .from('bids')
+      .select('*')
+      .eq('id', bidId)
+      .single();
+
+    if (bidErr || !bid) return { success: false, message: '선택한 응찰 내역을 찾을 수 없습니다.' };
+
+    // 계약서 생성을 위해 posts 상태 변경 (closed)
+    await supabase.from('posts').update({ status: 'closed' }).eq('id', postId);
+
+    // 계약서 DB 저장
+    const { data: contract, error: contractErr } = await supabase
+      .from('contracts')
+      .insert([
+        {
+          post_id: postId,
+          supplier_name: bid.bidder_name,
+          unit_price: bid.unit_price,
+          start_date: new Date().toISOString().split('T')[0],
+          end_date: '2026-12-31',
+          penalty_amount: 10000000
+        }
+      ])
+      .select()
+      .single();
+
+    if (contractErr) return { success: false, message: contractErr.message };
+
+    return { success: true, message: '낙찰 처리 완료', contract };
+  } catch (err: any) {
+    return { success: false, message: err.message || '서버 오류 발생' };
+  }
 }
