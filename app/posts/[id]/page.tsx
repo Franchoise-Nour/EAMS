@@ -12,14 +12,29 @@ const supabase = createClient(
 
 export default function PostDetailPage({ params }: { params: { id: string } }) {
   const [post, setPost] = useState<any>(null);
-  const [allPosts, setAllPosts] = useState<any[]>([]); // 사이드바용 공개 입찰 공고 목록
+  const [allPosts, setAllPosts] = useState<any[]>([]);
   const [bids, setBids] = useState<any[]>([]);
   const [lowestPrice, setLowestPrice] = useState<number | null>(null);
   const [contract, setContract] = useState<any>(null);
 
+  // 응찰 입력 폼
   const [bidderName, setBidderName] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 낙찰 및 특약 모달 상태
+  const [selectedBid, setSelectedBid] = useState<any>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  // 전자 계약서 설정 양식 State
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState('2026-12-31');
+  const [penaltyAmount, setPenaltyAmount] = useState('10000000');
+  const [delayPenaltyRate, setDelayPenaltyRate] = useState('일 0.1%');
+  const [warrantyPeriod] = useState('검수 완료일로부터 1년');
+  const [specialTerms, setSpecialTerms] = useState(
+    '1. 모든 납품 물품은 발주자의 품질 검수 기준을 충족해야 한다.\n2. 분쟁 발생 시 발주자 관할 법원을 합의 관할로 한다.'
+  );
 
   useEffect(() => {
     loadInitialData();
@@ -58,7 +73,6 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     }
   }
 
-  // 사이드바용 전체 공개 입찰 공고 가져오기
   async function fetchAllPosts() {
     const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
     if (data) setAllPosts(data);
@@ -80,19 +94,30 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     }
   };
 
-  // 비밀번호 없이 즉시 낙찰 처리
-  const handleAwardDirect = async (bid: any) => {
-    if (!confirm(`'${bid.bidder_name}'님 (${Number(bid.unit_price).toLocaleString()}원) 입찰건으로 즉시 낙찰 결정하시겠습니까?`)) {
-      return;
-    }
+  // 낙찰 버튼 클릭 시 모달 오픈
+  const openAwardModal = (bid: any) => {
+    setSelectedBid(bid);
+    setShowModal(true);
+  };
+
+  // 전자 계약서 작성 및 낙찰 실행
+  const handleAwardAndContract = async () => {
+    if (!startDate || !endDate) return alert('계약 기간을 설정해 주세요.');
 
     setIsSubmitting(true);
-    // 패스워드 인자 자리에 빈 값을 넘깁니다.
-    const res = await awardAndContractAction(params.id, bid.id, '');
+    const res = await awardAndContractAction(params.id, selectedBid.id, {
+      startDate,
+      endDate,
+      penaltyAmount: Number(penaltyAmount),
+      delayPenaltyRate,
+      warrantyPeriod,
+      specialTerms,
+    });
     setIsSubmitting(false);
 
     if (res.success) {
-      alert('낙찰 결정 및 전자계약서가 즉시 발급되었습니다.');
+      alert('낙찰 결정 및 전자계약서가 발급되었습니다.');
+      setShowModal(false);
       setContract(res.contract);
       setPost((prev: any) => ({ ...prev, status: 'closed' }));
       fetchAllPosts();
@@ -116,7 +141,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
       {/* 2단 메인 레이아웃 */}
       <div style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 15px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px' }}>
         
-        {/* [좌측 본문] 공고 상세 내용 & 응찰 현황 & 계약서 */}
+        {/* [좌측 본문] */}
         <div>
           {/* 공고 제목 */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -172,7 +197,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </>
           )}
 
-          {/* 본문 응찰 내역 표 (바로 낙찰 결정) */}
+          {/* 현재 공고 응찰 현황 */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a3863', borderLeft: '4px solid #1a3863', paddingLeft: '8px', marginBottom: '10px' }}>현재 공고 응찰 현황</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '2px solid #555', backgroundColor: '#fff', marginBottom: '30px' }}>
             <thead>
@@ -180,7 +205,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                 <th style={gridThStyle}>공급 신청자</th>
                 <th style={gridThStyle}>제시 공급 단가</th>
                 <th style={gridThStyle}>접수 일시</th>
-                <th style={gridThStyle}>낙찰 실행</th>
+                <th style={gridThStyle}>계약 및 낙찰</th>
               </tr>
             </thead>
             <tbody>
@@ -196,8 +221,8 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                     <td style={tdStyle}>{new Date(b.created_at).toLocaleString('ko-KR')}</td>
                     <td style={tdStyle}>
                       {isActive ? (
-                        <button onClick={() => handleAwardDirect(b)} disabled={isSubmitting} style={btnActionStyle}>
-                          바로 낙찰
+                        <button onClick={() => openAwardModal(b)} disabled={isSubmitting} style={btnActionStyle}>
+                          낙찰 및 계약 설정
                         </button>
                       ) : (
                         <span style={{ color: '#888' }}>마감됨</span>
@@ -209,7 +234,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             </tbody>
           </table>
 
-          {/* 전자 계약서 */}
+          {/* 전자 계약서 출력 화면 */}
           {contract && (
             <div style={{ backgroundColor: '#fff', border: '2px solid #1a3863', padding: '25px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
               <h2 style={{ textAlign: 'center', fontSize: '18px', color: '#1a3863', textDecoration: 'underline', marginBottom: '20px' }}>
@@ -218,20 +243,35 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
               <p style={{ lineHeight: '1.6', marginBottom: '12px' }}>
                 수요자(이하 "발주자")와 공급자 <strong>{contract.supplier_name}</strong>(이하 "공급자")는 다음과 같이 물품 공급 계약을 체결한다.
               </p>
+              
               <div style={{ marginBottom: '12px' }}>
                 <strong>제1조 (공급 물품 및 단가)</strong><br />
                 1. 물품명: {post.item_name} ({post.spec})<br />
                 2. 확정 공급 단가: <strong>개당 {Number(contract.unit_price).toLocaleString()}원 (VAT 포함)</strong>
               </div>
+
               <div style={{ marginBottom: '12px' }}>
                 <strong>제2조 (계약 기간)</strong><br />
                 본 계약의 기간은 <strong>{contract.start_date} ~ {contract.end_date}</strong> 까지로 한다.
               </div>
-              <div style={{ marginBottom: '20px' }}>
-                <strong>제3조 (위약금 조항)</strong><br />
-                귀책사유로 계약 해지 시, 귀책 당사자는 상대방에게 <strong>위약금 {Number(contract.penalty_amount).toLocaleString()}원</strong>을 지급한다.
+
+              <div style={{ marginBottom: '12px' }}>
+                <strong>제3조 (위약금 및 지체상금)</strong><br />
+                1. 귀책사유로 계약 해지 시 위약금: <strong>{Number(contract.penalty_amount).toLocaleString()}원</strong><br />
+                2. 납품 지연 지체상금율: <strong>{contract.delay_penalty_rate || '일 0.1%'}</strong><br />
+                3. 하자보수보증기간: <strong>{contract.warranty_period || '검수 완료일로부터 1년'}</strong>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+
+              {contract.special_terms && (
+                <div style={{ marginBottom: '20px', backgroundColor: '#fdf8e4', padding: '10px', border: '1px solid #faebcc' }}>
+                  <strong>제4조 (특약 사항)</strong>
+                  <pre style={{ margin: '5px 0 0 0', fontFamily: 'inherit', whitespace: 'pre-wrap', fontSize: '11px', color: '#555' }}>
+                    {contract.special_terms}
+                  </pre>
+                </div>
+              )}
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
                 <tbody>
                   <tr>
                     <td style={{ border: '1px solid #aaa', padding: '10px', width: '50%', backgroundColor: '#fdfdfd' }}>
@@ -282,13 +322,79 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
         </div>
 
       </div>
+
+      {/* [계약 조건 및 특약 설정 모달 팝업] */}
+      {showModal && selectedBid && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#fff', width: '500px', padding: '20px', borderRadius: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1a3863', borderBottom: '2px solid #1a3863', paddingBottom: '8px' }}>
+              전자 계약 조건 및 특약 설정
+            </h3>
+            
+            <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#333' }}>
+              낙찰 대상자: <strong>{selectedBid.bidder_name}</strong> (단가: {Number(selectedBid.unit_price).toLocaleString()}원)
+            </p>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '15px' }}>
+              <tbody>
+                <tr>
+                  <th style={thStyle}>계약 시작일</th>
+                  <td style={tdStyle}>
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+                  </td>
+                </tr>
+                <tr>
+                  <th style={thStyle}>계약 종료일</th>
+                  <td style={tdStyle}>
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
+                  </td>
+                </tr>
+                <tr>
+                  <th style={thStyle}>위약금(원)</th>
+                  <td style={tdStyle}>
+                    <input type="number" value={penaltyAmount} onChange={(e) => setPenaltyAmount(e.target.value)} style={inputStyle} />
+                  </td>
+                </tr>
+                <tr>
+                  <th style={thStyle}>지체상금율</th>
+                  <td style={tdStyle}>
+                    <input type="text" value={delayPenaltyRate} onChange={(e) => setDelayPenaltyRate(e.target.value)} style={inputStyle} />
+                  </td>
+                </tr>
+                <tr>
+                  <th style={thStyle}>특약 사항</th>
+                  <td style={tdStyle}>
+                    <textarea 
+                      rows={4} 
+                      value={specialTerms} 
+                      onChange={(e) => setSpecialTerms(e.target.value)} 
+                      style={{ ...inputStyle, width: '100%', height: '80px', resize: 'vertical' }}
+                      placeholder="특약 내용을 입력하세요."
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button onClick={() => setShowModal(false)} style={{ backgroundColor: '#6c757d', color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer' }}>
+                취소
+              </button>
+              <button onClick={handleAwardAndContract} disabled={isSubmitting} style={btnCourtStyle}>
+                {isSubmitting ? '발급 중...' : '확정 및 계약서 발급'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
-const thStyle = { backgroundColor: '#f0f4f8', border: '1px solid #d0d7de', padding: '8px', textAlign: 'left' as const, width: '22%' };
+const thStyle = { backgroundColor: '#f0f4f8', border: '1px solid #d0d7de', padding: '8px', textAlign: 'left' as const, width: '28%' };
 const tdStyle = { border: '1px solid #d0d7de', padding: '8px', backgroundColor: '#fff' };
 const gridThStyle = { border: '1px solid #ccc', padding: '8px', textAlign: 'center' as const };
-const inputStyle = { border: '1px solid #abb8c3', padding: '6px', fontSize: '12px', width: '180px' };
+const inputStyle = { border: '1px solid #abb8c3', padding: '5px', fontSize: '12px', width: '200px' };
 const btnCourtStyle = { backgroundColor: '#1a3863', color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' as const };
 const btnActionStyle = { backgroundColor: '#d9534f', color: '#fff', border: 'none', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' as const };

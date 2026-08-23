@@ -64,8 +64,19 @@ export async function submitBidAction(postId: any, bidderName: any, unitPrice: a
   }
 }
 
-// 3. 낙찰 처리 Action (비밀번호 검증 제외)
-export async function awardAndContractAction(postId: any, bidId: any, password: any) {
+// 낙찰 처리 및 전자계약서 작성 (계약기간 및 특약 설정 포함)
+export async function awardAndContractAction(
+  postId: string,
+  bidId: string,
+  contractDetails: {
+    startDate: string;
+    endDate: string;
+    penaltyAmount: number;
+    delayPenaltyRate: string;
+    warrantyPeriod: string;
+    specialTerms: string;
+  }
+) {
   try {
     // 입찰 내역 조회
     const { data: bid, error: bidErr } = await supabase
@@ -87,9 +98,12 @@ export async function awardAndContractAction(postId: any, bidId: any, password: 
           post_id: postId,
           supplier_name: bid.bidder_name,
           unit_price: bid.unit_price,
-          start_date: new Date().toISOString().split('T')[0],
-          end_date: '2026-12-31',
-          penalty_amount: 10000000
+          start_date: contractDetails.startDate,
+          end_date: contractDetails.endDate,
+          penalty_amount: contractDetails.penaltyAmount,
+          delay_penalty_rate: contractDetails.delayPenaltyRate,
+          warranty_period: contractDetails.warrantyPeriod,
+          special_terms: contractDetails.specialTerms,
         }
       ])
       .select()
