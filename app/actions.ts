@@ -8,6 +8,24 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const { data, error } = await supabase
+  .from('posts')
+  .insert([
+    {
+      title: form.title,
+      item_name: form.itemName,
+      manufacturer: form.manufacturer,
+      spec: form.spec,
+      monthly_volume: form.monthlyVolume,
+      delivery_place: form.deliveryPlace,
+      end_date: form.endDate,
+      password_hash: hashedPassword, // 👈 'password'를 'password_hash'로 변경
+      status: 'open'
+    }
+  ])
+  .select()
+  .single();
+
 export async function createAuctionAction(form: any) {
   try {
     // 1. 비밀번호 암호화
