@@ -33,5 +33,10 @@ export async function selectWinningBid(formData: FormData) {
 export async function awardAndContractAction(postId: any, bidId: any, password: any) {
   // 낙찰 및 계약 처리 로직
   console.log('Award and contract:', { postId, bidId, password });
-  return { success: true, message: '' };
+
+  return { 
+    success: true, 
+    message: '',
+    contract: {} // 👈 contract 속성 추가 (필요에 따라 객체/문자열 형태로 지정)
+  };
 }
