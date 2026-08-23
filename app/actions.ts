@@ -31,6 +31,16 @@ export async function awardAndContractAction(postId: string, bidId: string, pass
     return { success: false, message: '진행 중인 경매가 아닙니다.' };
   }
 
+  export async function createAuctionAction(formData: FormData) {
+  // DB 저장 logic (Supabase 연동 코드 위치)
+  const title = formData.get('title');
+  const content = formData.get('content');
+
+  // 필요 시 Supabase insert 로직 작성
+  console.log('Post created:', { title, content });
+  return { success: true };
+}
+
   // 비밀번호 비교
   const isValid = await bcrypt.compare(password, post.password_hash);
   if (!isValid) {
